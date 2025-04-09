@@ -1,0 +1,31 @@
+version: 1
+disable_existing_loggers: false
+
+formatters:
+  default_fmt:
+    datefmt: '%Y-%m-%d %H:%M:%S'
+    format: '{"level":%(levelno)d,"level_name":"%(levelname)s","log_time":"%(asctime)s","process":{"pid":%(process)d,"pname":"%(processName)s"},"thread":{tid":"%(thread)d,"tname":"%(threadName)s"},"module":"%(module)s","function":"%(funcName)s","line_no":%(lineno)d,"message":"%(message)s"}'
+
+handlers:
+  file_sized_hnd:
+    class: logging.handlers.RotatingFileHandler
+    formatter: default_fmt
+    filename: service..sized.log
+    maxBytes: 10485760  # 10mb
+    backupCount: 10
+  file_dated_hnd:
+    class: logging.handlers.TimedRotatingFileHandler
+    formatter: default_fmt
+    filename: service.date.log
+    when: midnight
+    backupCount: 10
+  default_hnd:
+    class: logging.StreamHandler
+    formatter: default_fmt
+    stream: ext://sys.stdout 
+
+root:
+  handlers:
+  - file_sized_hnd
+  - file_dated_hnd
+  level: DEBUG

@@ -1,0 +1,38 @@
+version: 1
+disable_existing_loggers: false
+
+formatters:
+  default_fmt:
+    datefmt: '%Y-%m-%d %H:%M:%S'
+    format: >
+      {
+        "level": %(levelno)d, 
+        "level_name": "%(levelname)s", 
+        "log_time": "%(asctime)s",
+        "process": {
+          "pid": %(process)d, 
+          "pname": "%(processName)s"
+        }, 
+        "thread": {
+          "tid": %(thread)d, 
+          "tname": "%(threadName)s"
+        }, 
+        "module": "%(module)s", 
+        "function": "%(funcName)s", 
+        "line_no": %(lineno)d, 
+        "message": "%(message)s"
+      }
+
+handlers:
+  default_hnd:
+    class: logging.StreamHandler
+    formatter: default_fmt
+    level: DEBUG
+    stream: ext://sys.stdout
+
+loggers:
+  default_logger:
+    handlers:
+    - default_hnd
+    level: DEBUG
+    propagate: false

@@ -1,0 +1,58 @@
+[tool.poetry]
+name = "practice"
+version = "0.1.0"
+description = ""
+authors = ["Ahram Oh <ohzakka@gmail.com>"]
+packages = [
+    { include = "practice_files", from="src"},
+    { include = "tools", from="src"},
+    { include = "problems", from="src" }
+]
+
+
+[tool.poetry.dependencies]
+python = "^3.8"
+requests = "^2.31.0"
+pytz = { version="^2023.3", python = "<3.9"}
+PyYAML = "^6.0.1"
+beautifulsoup4 = "^4.12.2"
+selenium = "^4.7.2"
+redis = "^4.6.0"
+opencv-python = "^4.8.0.74"
+tblib = "^2.0.0"
+SQLAlchemy = "^2.0.19"
+psycopg = "^3.1.9"
+mysql-connector-python = "^8.1.0"
+fastapi-plugins = "^0.12.0"
+django = "^4.2.3"
+pandas = "^2.0.3"
+
+[tool.poetry.group.dev.dependencies]
+mypy = "^1.4.1"
+black = "^23.7.0"
+hypothesis = "^6.82.0"
+pytest-factoryboy = "^2.5.1"
+pytest = "^7.4.0"
+pytest-cov = "^4.1.0"
+pre-commit = "^3.3.3"
+bandit = "^1.7.5"
+pytest-mock-resources = "^2.9.0"
+isort = "^5.12.0"
+detect-secrets = "^1.4.0"
+ipykernel = "^6.24.0"
+
+
+[tool.black]
+line-lengh = 79
+target-version = ['py38', 'py39', 'py310', 'py311']
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = "-ra"
+testpaths = [
+    "tests",
+]
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

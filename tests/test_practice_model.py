@@ -1,0 +1,6 @@
+# from practice_files.practice_sqlalchemy.model import Human
+
+
+# def test_validation_model(session_test, test_human_model):
+#     man = session_test.query(Human).all()
+#     assert test_human_model.id_number == man.id_number
