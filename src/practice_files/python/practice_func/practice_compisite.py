@@ -19,8 +19,6 @@ def composite_funcs(*funcs: Callable) -> Callable:
     # return reduce(lambda f, g: (lambda x: f(g(x))), funcs)
     # msg = ",".join(["{}".format(func.__name__) for func in funcs])
     # logging.debug(msg)
-    logging.debug(funcs[0].__name__)
-
     # func = lambda x: funcs[0](composite_funcs(*funcs[1:])(x)) if len(funcs) > 1 else funcs[0]
 
     # return lambda x: funcs[0](composite_funcs(*funcs[1:])(x)) if len(funcs) > 1 else funcs[0]
