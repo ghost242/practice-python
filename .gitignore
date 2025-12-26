@@ -332,3 +332,6 @@ practice_with_work/
 poetry.lock
 
 # End of https://www.toptal.com/developers/gitignore/api/osx,windows,visualstudiocode,pycharm+all,python
+
+# Custom list on device
+.ignored

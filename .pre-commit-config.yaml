@@ -1,0 +1,37 @@
+default_language_version:
+  python: python3.13
+
+repos:
+  # ────────────────────────────────────────────────────────────────
+  # Black — Code Formatter
+  # ────────────────────────────────────────────────────────────────
+  - repo: https://github.com/psf/black
+    rev: 25.12.0
+    hooks:
+      - id: black
+        language_version: python3.13
+        args:
+          - --target-version=py313
+
+  # ────────────────────────────────────────────────────────────────
+  # detect-secrets — Secret Scanner
+  # ────────────────────────────────────────────────────────────────
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.5.0
+    hooks:
+      - id: detect-secrets
+        language_version: python3.13
+        args:
+          - --baseline
+          - .secrets.baseline
+
+  # ────────────────────────────────────────────────────────────────
+  # Bandit — Security Linter
+  # ────────────────────────────────────────────────────────────────
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.9.2
+    hooks:
+      - id: bandit
+        language_version: python3.13
+        args:
+          - -ll

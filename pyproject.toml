@@ -9,42 +9,83 @@ packages = [
     { include = "problems", from="src" }
 ]
 
-
 [tool.poetry.dependencies]
-python = "^3.8"
-requests = "^2.31.0"
+python = "^3.11"
 pytz = { version="^2023.3", python = "<3.9"}
 PyYAML = "^6.0.1"
+tblib = "^2.0.0"
+psycopg = "^3.1.9"
+redis = "^4.6.0"
+mysql-connector-python = "^8.1.0"
+python-crontab = "^3.2.0"
+apscheduler = "^3.11.0"
+gevent = "^25.5.1"
+croniter = "^6.0.0"
+datamodel-code-generator = "^0.39.0"
+llama-index = "^0.14.10"
+llama-index-llms-ollama = "^0.9.1"
+langchain = "^1.2.0"
+langchain-ollama = "^1.0.1"
+
+[tool.poetry.group.web.dependencies]
 beautifulsoup4 = "^4.12.2"
 selenium = "^4.7.2"
-redis = "^4.6.0"
-opencv-python = "^4.8.0.74"
-tblib = "^2.0.0"
 SQLAlchemy = "^2.0.19"
-psycopg = "^3.1.9"
-mysql-connector-python = "^8.1.0"
-fastapi-plugins = "^0.12.0"
 django = "^4.2.3"
-pandas = "^2.0.3"
+fastapi = "^0.115.12"
+uvicorn = {extras = ["standard"], version = "^0.34.2"}
+crawlee = {extras = ["all"], version = "^0.6.9"}
+aiohttp = "^3.12.14"
+requests = "^2.31.0"
 
 [tool.poetry.group.dev.dependencies]
-mypy = "^1.4.1"
-black = "^23.7.0"
+mypy = "^1.19.1"
+black = "^25.12.0"
 hypothesis = "^6.82.0"
 pytest-factoryboy = "^2.5.1"
 pytest = "^7.4.0"
 pytest-cov = "^4.1.0"
-pre-commit = "^3.3.3"
-bandit = "^1.7.5"
+pre-commit = "^4.5.0"
+bandit = "^1.9.2"
 pytest-mock-resources = "^2.9.0"
 isort = "^5.12.0"
-detect-secrets = "^1.4.0"
+detect-secrets = "^1.5.0"
 ipykernel = "^6.24.0"
 
+[tool.poetry.group.ai.dependencies]
+kiwipiepy = {extras = ["konlpy"], version = "^0.22.1"}
+opencv-python = "^4.12.0.88"
+llama-index = "^0.14.9"
+llama-index-llms-ollama = "^0.9.0"
+langchain = "^1.1.0"
+langchain-ollama = "^1.0.0"
+networkx = "^3.6"
+matplotlib = "^3.10.7"
+polyglot = "^16.7.4"
+pandas = "^2.2"
+
+[tool.mypy]
+python_version = "3.13"
+
+# Strictness
+strict = true
+warn_unused_configs = true
+warn_return_any = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+
+# Import handling
+ignore_missing_imports = true
+follow_imports = "silent"
+
+# Output
+show_error_codes = true
+pretty = true
+color_output = true
 
 [tool.black]
-line-lengh = 79
-target-version = ['py38', 'py39', 'py310', 'py311']
+line-length = 79
+target-version = ['py313']
 
 [tool.pytest.ini_options]
 minversion = "6.0"
