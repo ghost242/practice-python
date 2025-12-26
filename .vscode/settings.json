@@ -1,4 +1,14 @@
 {
     "python.analysis.typeCheckingMode": "basic",
-    "python.REPL.enableREPLSmartSend": false
+    "python.REPL.enableREPLSmartSend": false,
+    "chat.agent.enabled": false,
+    "chat.commandCenter.enabled": false,
+    "chat.extensionTools.enabled": false,
+    "chat.focusWindowOnConfirmation": false,
+    "chat.setupFromDialog": false,
+    "telemetry.feedback.enabled": false,
+    "cursorpyright.analysis.typeCheckingMode": "basic",
+    "python-envs.defaultPackageManager": "ms-python.python:poetry",
+    "python-envs.pythonProjects": [],
+    "python-envs.defaultEnvManager": "ms-python.python:poetry"
 }
