@@ -26,6 +26,7 @@ def send_message(url, msg):
 
     print(res)
 
+
 def main():
     # send_message_job_queue()
     # logging.getLogger().setLevel(logging.DEBUG)

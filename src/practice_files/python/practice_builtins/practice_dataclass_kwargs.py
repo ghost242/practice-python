@@ -1,11 +1,14 @@
 from dataclasses import dataclass, field, Field, fields, MISSING
 
-from practice_builtins.practice_dataclass_conversion import MetaDataClass
+from practice_files.python.practice_builtins.practice_dataclass_conversion import (
+    MetaDataClass,
+)
 
 """
 참고:
     https://docs.python.org/3.7/library/functions.html#exec
 """
+
 
 # There is two other versions.
 # 1. if default or default_factory is exists, then this field is set a kwarg.
@@ -51,7 +54,7 @@ def with_keyword_args(cls):
 
     gl = {}
     ns = {}
-    exec(__init_fn, gl, ns)
+    # exec(__init_fn, gl, ns)
 
     setattr(cls, "__init__", ns["__init__"])
 

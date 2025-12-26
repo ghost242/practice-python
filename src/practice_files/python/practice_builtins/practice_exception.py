@@ -14,7 +14,7 @@ pickling_support.install()
 
 def find_parent(target_parent):
     cur = Path(os.getcwd())
-    
+
     while cur != cur.root:
         if (cur / target_parent).exists():
             return cur / target_parent
@@ -24,25 +24,36 @@ def find_parent(target_parent):
         raise FileNotFoundError(f"Not found {target_parent} in {os.getcwd()}.")
 
 
-def exc_hook(tp, val, tb, ):
+def exc_hook(
+    tp,
+    val,
+    tb,
+):
     print(tb)
     stacks = traceback.extract_tb(tb)
     for stack in stacks:
-        stack.filename = stack.filename.replace(str(project_root), "<PROJECT_ROOT>")
+        stack.filename = stack.filename.replace(
+            str(project_root), "<PROJECT_ROOT>"
+        )
 
-sys.excepthook=exc_hook
+
+sys.excepthook = exc_hook
 
 
 project_root = find_parent("codelab-python")
 
+
 def a():
     raise ValueError("raised error")
+
 
 def aa():
     a()
 
+
 def aaa():
     aa()
+
 
 def b():
     try:
@@ -50,7 +61,7 @@ def b():
     except Exception as e:
         # Exception에서 traceback은 pickling이 불가능한 객체임. 이유로인해 pickling에 실패함.
         tb_obj = binascii.hexlify(pickle.dumps(e.__traceback__))
-        
+
         return tb_obj
     # a()
 
@@ -105,7 +116,7 @@ def main_exc(func):
             if k in ["f_builtins", "f_globals"] or k.startswith("__"):
                 continue
             print(k, getattr(tb.tb_frame, k))
-        
+
         while tb.tb_next is not None:
             tb = tb.tb_next
 
@@ -123,7 +134,7 @@ def finally_test():
     except Exception as e:
         # print(traceback.format_exception(type(e), e, e.__traceback__))
         print(e.__traceback__)
-        
+
         raise e
     finally:
         print("called finally")
@@ -168,7 +179,6 @@ def main():
     # for p in ps:
     #     print(p, "join")
     #     p.join()
-
 
 
 if __name__ == "__main__":

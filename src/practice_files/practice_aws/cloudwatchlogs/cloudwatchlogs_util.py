@@ -1,7 +1,7 @@
 import json
 import logging
 from dataclasses import asdict, dataclass, field
-from typing import Sequence, Tuple, Optional, Literal 
+from typing import Sequence, Tuple, Optional, Literal
 from warnings import warn
 
 import requests
@@ -14,7 +14,27 @@ __version__ = "2014-03-28"
 # TODO: 모든 함수 안에서 HTTP status code의 에러 값에 대한 처리 로직이 필요함.
 
 
-RetentionDays = Literal[-1, 1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1827, 3653]
+RetentionDays = Literal[
+    -1,
+    1,
+    3,
+    5,
+    7,
+    14,
+    30,
+    60,
+    90,
+    120,
+    150,
+    180,
+    365,
+    400,
+    545,
+    731,
+    1827,
+    3653,
+]
+
 
 @dataclass
 class LogGroup:
@@ -69,7 +89,7 @@ def describe_log_groups(name_prefix="") -> Sequence[LogGroup]:
         req_payload=payload,
     )
 
-    res = requests.post(url, headers=header, data=payload)
+    res = requests.post(url, headers=header, data=payload, timeout=60)
 
     """
     HTTP Status Code: 400
@@ -117,7 +137,7 @@ def create_log_group(name, tags: Optional[dict] = None) -> str:
         req_payload=payload,
     )
 
-    res = requests.post(url, headers=header, data=payload)
+    res = requests.post(url, headers=header, data=payload, timeout=60)
     """
 
     HTTP Status Code: 400
@@ -174,7 +194,7 @@ def put_retention_policy(
         req_payload=payload,
     )
 
-    res = requests.post(url, headers=header, data=payload)
+    res = requests.post(url, headers=header, data=payload, timeout=60)
 
     """
 
@@ -226,7 +246,7 @@ def describe_log_streams(log_group, name_prefix="") -> Sequence[LogStream]:
         req_payload=payload,
     )
 
-    res = requests.post(url, headers=header, data=payload)
+    res = requests.post(url, headers=header, data=payload, timeout=60)
     """
 
     HTTP Status Code: 400
@@ -273,7 +293,7 @@ def create_log_stream(log_group, name) -> str:
         req_payload=payload,
     )
 
-    res = requests.post(url, headers=header, data=payload)
+    res = requests.post(url, headers=header, data=payload, timeout=60)
     """
 
     HTTP Status Code: 400
@@ -334,7 +354,7 @@ def put_log_events(
         req_payload=payload,
     )
 
-    res = requests.post(url, headers=header, data=payload)
+    res = requests.post(url, headers=header, data=payload, timeout=60)
 
     """
 

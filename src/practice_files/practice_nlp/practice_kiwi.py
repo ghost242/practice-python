@@ -6,4 +6,3 @@ base = "[바이오USA] SK바이오팜, 피닉스랩과 생성형 AI 개발 MOU -
 processor = Kiwi()
 
 print([(token.form, token.tag) for token in processor.tokenize(base)])
-

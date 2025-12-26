@@ -1,4 +1,6 @@
 import time
+
+
 def func():
     for _ in range(10):
         print("Wait...")
@@ -6,6 +8,6 @@ def func():
 
     raise Exception("Test Exception")
 
-if __name__=="__main__":
-    func()
 
+if __name__ == "__main__":
+    func()

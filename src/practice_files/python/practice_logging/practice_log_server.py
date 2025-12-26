@@ -13,6 +13,6 @@ def log_test():
 
     stopListening()
 
-if __name__=="__main__":
-    log_test()
 
+if __name__ == "__main__":
+    log_test()

@@ -1,6 +1,7 @@
 from pathlib import Path
 import os
 
+
 def find_child(target, cur=os.getcwd()):
     cur_path = Path(cur)
 
@@ -8,7 +9,7 @@ def find_child(target, cur=os.getcwd()):
 
     if not children:
         return False
-        
+
     for child in children:
         if child == target:
             return str(cur_path / child)
@@ -17,6 +18,7 @@ def find_child(target, cur=os.getcwd()):
                 return find_child(target, str(cur_path / child))
             else:
                 return False
+
 
 def get_parent(target, cur=os.getcwd()):
     cur_path = Path(cur)

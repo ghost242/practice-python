@@ -12,7 +12,8 @@ def main():
     # warnings.warn("warning message", RuntimeWarning)
 
     warnings.warn(
-        "Google Ads V5 will deprecate June 23, 2021", DeprecationWarning,
+        "Google Ads V5 will deprecate June 23, 2021",
+        DeprecationWarning,
     )
 
     print("common work message")

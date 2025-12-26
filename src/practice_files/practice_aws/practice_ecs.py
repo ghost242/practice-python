@@ -9,9 +9,7 @@ def main():
         region_name="ap-northeast-2",
     )
 
-    tasks = ecs.list_tasks(
-        cluster="test-cluster", desiredStatus="RUNNING"
-    )
+    tasks = ecs.list_tasks(cluster="test-cluster", desiredStatus="RUNNING")
     tasks = tasks["taskArns"]
 
     res = ecs.describe_tasks(cluster="test-cluster", tasks=tasks)

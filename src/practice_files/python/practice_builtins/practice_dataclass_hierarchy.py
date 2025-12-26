@@ -18,10 +18,10 @@ class ParentClass:
 
 @dataclass
 class ChildClass(ParentClass):
-    b: SomeClassB = field(default=None)
-    c: int = field(default=None)
-    d: str = field(default=None)
-    e: list = field(default=None)
+    b: SomeClassB | None = field(default=None)
+    c: int | None = field(default=None)
+    d: str | None = field(default=None)
+    e: list | None = field(default=None)
 
 
 def main():

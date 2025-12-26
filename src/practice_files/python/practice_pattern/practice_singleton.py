@@ -34,6 +34,7 @@ class Obj:
     def __str__(self):
         return f"<class '{self.__class__.__name__}' | x:{type(self.x)}({self.x}), y:{type(self.y)}({self.y}), z:{type(self.z)}({self.z})>"
 
+
 @singleton
 class ObjB:
     def __init__(self, x, y, z):
@@ -79,10 +80,10 @@ def caller_2():
 
     return o
 
+
 if __name__ == "__main__":
     o1 = caller_1()
     o2 = caller_2()
 
     print(id(o1), id(o2))
     print(o1 == o2)
-

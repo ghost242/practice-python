@@ -149,7 +149,9 @@ class MetaDataClass(type):
             if type_ == dict:
                 if isinstance(val, str):
                     try:
-                        conv_target = json.loads(val,)
+                        conv_target = json.loads(
+                            val,
+                        )
                     except json.JSONDecodeError:
                         conv_target = val
                 elif isinstance(val, dict):

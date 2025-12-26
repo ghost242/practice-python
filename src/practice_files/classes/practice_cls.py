@@ -34,8 +34,7 @@ class B(A):
 
 class MySQLContext:
     @overload
-    def __init__(self, info: dict):
-        ...
+    def __init__(self, info: dict): ...
 
     @overload
     def __init__(
@@ -48,8 +47,7 @@ class MySQLContext:
         port,
         database,
         query=None,
-    ):
-        ...
+    ): ...
 
     def __init__(
         self,

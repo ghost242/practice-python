@@ -101,7 +101,9 @@ def add_create_parser(job_parser):
 
 def add_reserve_parser(job_parser):
     reserve_parser = job_parser.add_parser(
-        "reserve", help="이미 만들어진 Job을 스케줄에 등록하는 명령어", add_help=False
+        "reserve",
+        help="이미 만들어진 Job을 스케줄에 등록하는 명령어",
+        add_help=False,
     )
     reserve_parser.add_argument(
         "--begin-time",
@@ -162,7 +164,9 @@ def add_update_parser(job_parser):
 
 def add_help_parser(job_parser):
     help_parser = job_parser.add_parser(
-        "help", help="명령어에 대한 사용법 및 도움말을 볼 수 있는 명령어", add_help=False
+        "help",
+        help="명령어에 대한 사용법 및 도움말을 볼 수 있는 명령어",
+        add_help=False,
     )
 
     help_parser.add_argument(
@@ -299,14 +303,10 @@ def main():
         ["reserve", "--begin-time", "2020-01-02T10:11:12", "fake_job_id"],
     )
     print(r)
-    print(
-        "create -c adsf --owner zxcv --name abcd ewi123"
-    )
+    print("create -c adsf --owner zxcv --name abcd ewi123")
     r = job_handle(
         None,
-        "create --owner zxcv --name abcd ewi123".split(
-            " "
-        ),
+        "create --owner zxcv --name abcd ewi123".split(" "),
     )
     print(r)
     print(

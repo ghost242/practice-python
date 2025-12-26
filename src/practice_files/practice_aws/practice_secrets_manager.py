@@ -71,6 +71,7 @@ def restore_secret(secret_name, region_name):
 
     return res
 
+
 @moto.mock_secretsmanager
 def call_getter():
     res = get_secret("a", "ap-northeast-2")

@@ -1,4 +1,4 @@
-""" Sample for study about HTTP/1.1"""
+"""Sample for study about HTTP/1.1"""
 
 import socket
 

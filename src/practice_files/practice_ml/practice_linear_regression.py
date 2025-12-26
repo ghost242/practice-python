@@ -5,6 +5,7 @@ Solution(x) = A * x + B
 
 import random
 
+
 def predictor(a, x, b):
     """
     A = parameter A in Real
@@ -13,6 +14,7 @@ def predictor(a, x, b):
     """
     return a * x + b
 
+
 def moderator(a, da):
     """
     A = parameter A in Solution
@@ -20,12 +22,14 @@ def moderator(a, da):
     """
     return a - da
 
+
 def diff(comp, sol):
     """
     comp = Real(x)
     sol = Solution(x)
     """
     return comp - sol
+
 
 def propagate(l, e, x):
     """
@@ -39,7 +43,7 @@ def propagate(l, e, x):
 
 
 def runner():
-    points = [(x, x + random.uniform(-1,1)) for x in range(1,100)]
+    points = [(x, x + random.uniform(-1, 1)) for x in range(1, 100)]
 
     a = 0.5
     b = 0
@@ -53,6 +57,7 @@ def runner():
         print(f"{res=}, {err=}, {a=}")
 
     print(f"f(x) = {a} * x + b")
+
 
 if __name__ == "__main__":
     runner()

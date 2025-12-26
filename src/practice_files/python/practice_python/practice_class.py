@@ -5,14 +5,16 @@ class Cls:
 
 class SystemException(Exception):
     exc_name: str
-    
+
     def __init_subclass__(cls) -> None:
         cls.exc_name = cls.__name__.replace("Exception", "")
         print("init subclass")
-        
+
         return super().__init_subclass__()
 
-class NaverException(SystemException): pass
+
+class NaverException(SystemException):
+    pass
 
 
 def main():

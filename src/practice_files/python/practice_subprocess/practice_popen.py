@@ -1,10 +1,13 @@
 import subprocess
 
+
 def main():
-    p = subprocess.Popen([
-        "python",
-        "popen_runner.py",
-        ])
+    p = subprocess.Popen(
+        [
+            "python",
+            "popen_runner.py",
+        ]
+    )
     while True:
         return_proc = p.poll()
         if return_proc:
@@ -12,6 +15,5 @@ def main():
             break
 
 
-if __name__=="__main__":
+if __name__ == "__main__":
     main()
-

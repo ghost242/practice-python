@@ -1,6 +1,7 @@
 """
 Decorator function for class methods and class member variables
 """
+
 from functools import wraps
 
 

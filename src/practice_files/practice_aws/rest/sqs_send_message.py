@@ -45,6 +45,7 @@ request_parameters += (
 )
 request_parameters += "}"
 
+
 # Key derivation functions. See:
 # http://docs.aws.amazon.com/general/latest/gr/signature-v4-examples.html#signature-v4-examples-python
 def sign(key, msg):
@@ -194,7 +195,9 @@ headers = {
 print("\nBEGIN REQUEST++++++++++++++++++++++++++++++++++++")
 print("Request URL = " + endpoint)
 
-r = requests.post(endpoint, data=request_parameters, headers=headers)
+r = requests.post(
+    endpoint, data=request_parameters, headers=headers, timeout=600
+)
 
 print("\nRESPONSE++++++++++++++++++++++++++++++++++++")
 print("Response code: %d\n" % r.status_code)

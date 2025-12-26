@@ -22,7 +22,11 @@ def composite_funcs(*funcs: Callable) -> Callable:
     # func = lambda x: funcs[0](composite_funcs(*funcs[1:])(x)) if len(funcs) > 1 else funcs[0]
 
     # return lambda x: funcs[0](composite_funcs(*funcs[1:])(x)) if len(funcs) > 1 else funcs[0]
-    return funcs[0] if len(funcs) == 1 else lambda x: funcs[0](composite_funcs(*funcs[1:])(x))
+    return (
+        funcs[0]
+        if len(funcs) == 1
+        else lambda x: funcs[0](composite_funcs(*funcs[1:])(x))
+    )
     # if len(funcs) > 1:
     #     composited_func = composite_funcs(*funcs[1:])
     #     res_func = lambda x: funcs[0](composited_func(x))
@@ -61,7 +65,7 @@ def main():
         return x - 2
 
     def power_2(x):
-        return x ** 2
+        return x**2
 
     # composited_funcs = composite_funcs(power_2, power_2, power_2, power_2, power_2)
 
@@ -75,7 +79,7 @@ def main():
 
     composited_funcs: Callable[[int], int] = composite_funcs(power_2)
     print("function result: ", composited_funcs(2))
-    
+
     # print(type(composited_funcs), composited_funcs.__name__)
     # print("file name: ", composited_funcs.__name__)
 

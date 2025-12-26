@@ -1,6 +1,7 @@
 """
 Class inheritance example.
 """
+
 import json
 
 
