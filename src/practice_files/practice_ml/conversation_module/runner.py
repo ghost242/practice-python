@@ -1,183 +1,389 @@
 from __future__ import annotations
 
-import logging
-from typing import Sequence, Generator, List
-from datetime import datetime, date
+import asyncio
+from typing import Any, Optional, Sequence
 
+from practice_files.practice_ml.conversation_module.decision import (
+    generate_subtopic_conclusion,
+    generate_subtopics,
+    select_next_speaker,
+)
+from practice_files.practice_ml.conversation_module.exporter import (
+    export_discussion,
+)
+from practice_files.practice_ml.conversation_module.generation import (
+    generate_agent_reply,
+    generate_final_synthesis,
+    update_agent_summary_from_history,
+)
 from practice_files.practice_ml.conversation_module.types import (
     AgentSpec,
     ConversationState,
-    Turn,
-)
-from practice_files.practice_ml.conversation_module.decision import (
-    DecisionAgent,
-    decide_for_all_agents,
-    choose_speaker,
-    decide_session_meta,
-    should_finish,
-)
-from practice_files.practice_ml.conversation_module.generation import (
-    generate_reply,
+    DiscussionParticipant,
+    SubtopicPlan,
 )
 
 
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+def _ensure_runtime_state_for_all(
+    participants: Sequence[DiscussionParticipant],
+    state: ConversationState,
+) -> None:
+    for participant in participants:
+        state.ensure_participant_state(participant.participant_id)
 
 
-def export_message(
-    to_file=False,
-    path: str | None = None,
-) -> Generator[None, str, None]:
-    """
-    Optional callback to export each message as it's generated.
-    Could be used to stream messages to a UI in real time, for example.
-    """
-    if path is None:
-        path = (
-            f"conversation_log.{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+def _get_auto_agents(
+    participants: Sequence[DiscussionParticipant],
+) -> list[AgentSpec]:
+    return [
+        participant
+        for participant in participants
+        if isinstance(participant, AgentSpec) and participant.can_self_generate
+    ]
+
+
+def _append_system_turn(
+    state: ConversationState,
+    content: str,
+) -> None:
+    state.append_turn(
+        participant_id="host",
+        participant_type="system",
+        content=content,
+    )
+
+
+def _append_agent_turn(
+    state: ConversationState,
+    agent_id: str,
+    content: str,
+) -> None:
+    state.append_turn(
+        participant_id=agent_id,
+        participant_type="agent",
+        content=content,
+    )
+
+
+def _record_turn_snapshots(
+    state: ConversationState,
+    participants: Sequence[DiscussionParticipant],
+    *,
+    speaker_id: str | None,
+) -> None:
+    last_turn = state.last_turn
+    if last_turn is None:
+        return
+
+    for participant in participants:
+        runtime = state.get_participant_state(participant.participant_id)
+        is_speaker = participant.participant_id == speaker_id
+
+        state.append_snapshot(
+            turn_index=last_turn.turn_index,
+            participant_id=participant.participant_id,
+            participant_type=participant.kind,
+            content=runtime.latest_reply if is_speaker else "",
+            latest_message_index=runtime.last_spoken_turn_index,
+            summary=runtime.summary_text or None,
+            latest_open_questions=list(runtime.latest_open_questions),
         )
 
-    if to_file:
-        f = open(path, "a")
-    else:
-        f = None
 
-    while True:
-        text = yield
-        if not text:
-            break
-
-        print(text)
-
-        if f:
-            f.write(text)
-            f.flush()
-
-
-def _init_exporter(export: bool, path: str | None):
-    exporter = export_message(to_file=export, path=path)
-    next(exporter)
-    return exporter
+def _default_subtopic_from_session(
+    topic: str,
+    achievement: str,
+) -> list[SubtopicPlan]:
+    return [
+        SubtopicPlan(
+            subtopic_id="topic",
+            title=topic,
+            kickoff_message=(
+                f"Discuss this topic and move toward the session objective: {achievement}"
+            ),
+            achievement=achievement,
+            conclusion="",
+            status="PENDING",
+        )
+    ]
 
 
-def _close_exporter(exporter):
-    if exporter is not None:
-        try:
-            exporter.close()
-        except Exception:
-            pass
+def _get_current_subtopic(state: ConversationState) -> Optional[SubtopicPlan]:
+    if state.current_subtopic_index < 0:
+        return None
+    if state.current_subtopic_index >= len(state.subtopics):
+        return None
+    return state.subtopics[state.current_subtopic_index]
+
+
+def _move_to_next_subtopic(
+    state: ConversationState,
+    *,
+    conclusion: str = "",
+) -> bool:
+    current = _get_current_subtopic(state)
+    if current is not None and current.status != "FINISH":
+        if conclusion:
+            current.conclusion = conclusion
+        current.status = "FINISH"
+
+    next_index = state.current_subtopic_index + 1
+    if next_index >= len(state.subtopics):
+        return False
+
+    state.current_subtopic_index = next_index
+    next_subtopic = state.subtopics[next_index]
+    next_subtopic.status = "ONGOING"
+    return True
+
+
+def _mark_reply_runtime(
+    state: ConversationState,
+    speaker_id: str,
+    reply: str,
+) -> None:
+    runtime = state.get_participant_state(speaker_id)
+    runtime.latest_reply = reply
+    runtime.times_spoken += 1
+    runtime.last_spoken_turn_index = len(state.turns) - 1
+
+
+def _mark_summary_runtime(
+    state: ConversationState,
+    participant_id: str,
+    summary_text: str,
+) -> None:
+    runtime = state.get_participant_state(participant_id)
+    runtime.summary_text = summary_text
+
+
+async def _close_current_subtopic(
+    *,
+    state: ConversationState,
+    participants: Sequence[DiscussionParticipant],
+    host_llm: Any | None,
+) -> bool:
+    current_subtopic = _get_current_subtopic(state)
+    if current_subtopic is None:
+        return False
+
+    conclusion = await generate_subtopic_conclusion(
+        state=state,
+        current_subtopic=current_subtopic,
+        participants=participants,
+        host_llm=host_llm,
+    )
+
+    if conclusion:
+        _append_system_turn(
+            state,
+            f"[SUBTOPIC CONCLUSION] {current_subtopic.title}\n{conclusion}",
+        )
+        _record_turn_snapshots(
+            state,
+            participants,
+            speaker_id=None,
+        )
+
+    return _move_to_next_subtopic(
+        state,
+        conclusion=conclusion,
+    )
+
+
+async def _initialize_subtopics(
+    *,
+    topic: str,
+    achievement: str,
+    agents: Sequence[AgentSpec],
+    host_llm: Any | None,
+) -> list[SubtopicPlan]:
+    subtopics = await generate_subtopics(
+        topic=topic,
+        achievement=achievement,
+        agents=agents,
+        host_llm=host_llm,
+    )
+
+    if not subtopics:
+        subtopics = _default_subtopic_from_session(topic, achievement)
+
+    if subtopics:
+        subtopics[0].status = "ONGOING"
+
+    return subtopics
+
+
+async def _run_subtopic_turn_loop(
+    *,
+    state: ConversationState,
+    participants: Sequence[DiscussionParticipant],
+    max_turns_per_subtopic: int,
+    host_llm: Any | None,
+) -> bool:
+    """
+    Returns:
+        True  -> moved to next subtopic and should continue
+        False -> no more subtopics remain, session should close
+    """
+    current_subtopic = _get_current_subtopic(state)
+    if current_subtopic is None:
+        return False
+
+    _append_system_turn(
+        state,
+        f"[SUBTOPIC] {current_subtopic.title}\n"
+        f"[ACHIEVEMENT] {current_subtopic.achievement}\n"
+        f"{current_subtopic.kickoff_message}",
+    )
+
+    _record_turn_snapshots(
+        state,
+        participants,
+        speaker_id=None,
+    )
+
+    auto_agents = _get_auto_agents(participants)
+
+    print(f"\n=== SUBTOPIC START: {current_subtopic.title} ===")
+    print("Subtopic achievement:", current_subtopic.achievement)
+
+    for turn_no in range(1, max_turns_per_subtopic + 1):
+        print(f"\n--- SUBTOPIC TURN {turn_no} ---")
+
+        speaker = await select_next_speaker(
+            agents=auto_agents,
+            state=state,
+            host_llm=host_llm,
+        )
+
+        if speaker is None:
+            print("Host found no suitable next speaker for this subtopic.")
+            return await _close_current_subtopic(
+                state=state,
+                participants=participants,
+                host_llm=host_llm,
+            )
+
+        print("Selected speaker:", speaker.participant_id)
+
+        reply_result = await generate_agent_reply(speaker, state)
+        print("Reply:", reply_result.reply)
+
+        _append_agent_turn(state, speaker.participant_id, reply_result.reply)
+        _mark_reply_runtime(
+            state=state,
+            speaker_id=speaker.participant_id,
+            reply=reply_result.reply,
+        )
+
+        summary_text = await update_agent_summary_from_history(
+            agent=speaker,
+            state=state,
+        )
+        print("Updated summary:", summary_text)
+
+        _mark_summary_runtime(
+            state=state,
+            participant_id=speaker.participant_id,
+            summary_text=summary_text,
+        )
+
+        _record_turn_snapshots(
+            state,
+            participants,
+            speaker_id=speaker.participant_id,
+        )
+
+    print("Reached max turns for current subtopic.")
+    return await _close_current_subtopic(
+        state=state,
+        participants=participants,
+        host_llm=host_llm,
+    )
 
 
 async def run_multi_agent_chat(
-    decider: DecisionAgent,
-    agents: List[AgentSpec],
-    state: ConversationState,
     *,
-    max_turns: int = 50,
-    export: bool = False,
-    export_path: str | None = None,
-):
-    """
-    Main loop for multi-agent chat.
+    topic: str,
+    achievement: str,
+    participants: Sequence[DiscussionParticipant],
+    max_turns_per_subtopic: int = 8,
+    host_llm: Any | None = None,
+    export_path: Optional[str] = None,
+) -> ConversationState:
+    state = ConversationState(
+        topic=topic,
+        achievement=achievement,
+    )
+    _ensure_runtime_state_for_all(participants, state)
 
-    Supports:
-      - structured-output or JSON-output decisions
-      - permanent FINISH removal
-      - meta decisions when no agent wants to speak
-      - clean exporter close without StopIteration
-    """
+    agents = _get_auto_agents(participants)
+    state.subtopics = await _initialize_subtopics(
+        topic=topic,
+        achievement=achievement,
+        agents=agents,
+        host_llm=host_llm,
+    )
 
-    # Copy initial agent list, will remove FINISHed agents over time
-    active_agents = list(agents)
-    turn_idx = 1
+    print("\n=== DISCUSSION START ===")
+    print("Topic:", topic)
+    print("Achievement:", achievement)
+    print("Subtopics:", [subtopic.title for subtopic in state.subtopics])
 
-    exporter = _init_exporter(export, export_path)
-
-    try:
-        while turn_idx <= max_turns and active_agents:
-            print(f"\n>> === TURN {turn_idx} ===")
-
-            # 1) Run coordinator decision for all *active* agents
-            decisions = await decide_for_all_agents(
-                decider, active_agents, state
-            )
-            print(f"[turn {turn_idx}] decisions: {decisions}")
-
-            # 2) Remove permanently FINISHed agents
-            finished_ids = {
-                d.agent_id for d in decisions if d.action == "FINISH"
-            }
-            if finished_ids:
-                active_agents = [
-                    a for a in active_agents if a.agent_id not in finished_ids
-                ]
-                if not active_agents:
-                    print(">> All agents have finished; ending session.")
-                    break
-
-            # 3) Optionally check consensus finish rule
-            if should_finish(decisions, state):
-                print(">> Consensus finish condition met; closing session.")
-                break
-
-            # 4) Choose next speaker
-            winner_id = choose_speaker(decisions)
-            if winner_id:
-                winner = next(
-                    a for a in active_agents if a.agent_id == winner_id
-                )
-
-                # Generate and export reply
-                reply = await generate_reply(winner, state)
-                print(f">> Generated reply from {winner_id}:\n{reply}\n")
-
-                # Export locally if requested
-                if exporter is not None:
-                    exporter.send(
-                        f"[{winner_id}:{winner.llm.model_name}] {reply}"
-                    )
-
-                # Append turn to conversation
-                state.append_turn(winner_id, "agent", reply)
-                turn_idx += 1
-                continue
-
-            # 5) If no SPEAK candidate (all WAIT), do meta decision
-            print(">> No speaker chosen next; invoking meta decision...")
-            meta = await decide_session_meta(decider, state)
-            print(f">> Meta decision: {meta}")
-
-            if meta.action == "CLOSE":
-                print(">> Coordinator decided to close session.")
-                break
-
-            # REFRESH: inject subtopic and continue
-            if meta.action == "REFRESH":
-                refresh_msg = ""
-                if meta.subtopic:
-                    refresh_msg = (
-                        f"Coordinator refresher: focus on '{meta.subtopic}'. "
-                        f"{meta.intent}"
-                    )
-                else:
-                    refresh_msg = meta.intent
-
-                print(f">> Injecting REFRESH: {refresh_msg}")
-
-                # Export if needed
-                if exporter is not None:
-                    exporter.send(f"[coordinator] {refresh_msg}")
-
-                # Append coordinator message and retry next turn
-                state.append_turn("coordinator", "system", refresh_msg)
-                turn_idx += 1
-                continue
-
-            # Safety stop control (should not fall through)
-            print(">> Unhandled continuation condition; closing session.")
+    while True:
+        current_subtopic = _get_current_subtopic(state)
+        if current_subtopic is None:
             break
 
-    finally:
-        # Clean up exporter generator without StopIteration
-        _close_exporter(exporter)
+        should_continue = await _run_subtopic_turn_loop(
+            state=state,
+            participants=participants,
+            max_turns_per_subtopic=max_turns_per_subtopic,
+            host_llm=host_llm,
+        )
+
+        if not should_continue:
+            break
+
+    synthesis_text = await generate_final_synthesis(
+        state=state,
+        participants=[p for p in participants if isinstance(p, AgentSpec)],
+        host_llm=host_llm,
+    )
+    if synthesis_text:
+        _append_system_turn(state, f"[SYNTHESIS] {synthesis_text}")
+        _record_turn_snapshots(
+            state,
+            participants,
+            speaker_id=None,
+        )
+
+    print("\n=== DISCUSSION END ===")
+
+    if export_path:
+        exported_path = export_discussion(state, participants, export_path)
+        print("Exported discussion log:", exported_path)
+
+    return state
+
+
+def run_multi_agent_chat_sync(
+    *,
+    topic: str,
+    achievement: str,
+    participants: Sequence[DiscussionParticipant],
+    max_turns_per_subtopic: int = 8,
+    host_llm: Any | None = None,
+    export_path: Optional[str] = None,
+) -> ConversationState:
+    return asyncio.run(
+        run_multi_agent_chat(
+            topic=topic,
+            achievement=achievement,
+            participants=participants,
+            max_turns_per_subtopic=max_turns_per_subtopic,
+            host_llm=host_llm,
+            export_path=export_path,
+        )
+    )

@@ -1,318 +1,386 @@
 from __future__ import annotations
 
-import logging
-import json
-import re
-from dataclasses import dataclass
-from typing import List, Sequence, Optional, Any
+from typing import Any, Optional, Sequence
 
+from practice_files.practice_ml.conversation_module.llm_utils import (
+    extract_llm_payload,
+)
+from practice_files.practice_ml.conversation_module.prompts import (
+    RESPONSE_SIZE_RULE,
+    build_subtopic_conclusion_messages,
+)
 from practice_files.practice_ml.conversation_module.types import (
     AgentSpec,
     ConversationState,
-    Decision,
-    MetaDecision,
-    MetaAction,
-)
-from practice_files.practice_ml.conversation_module.prompts import (
-    build_decision_messages,
-    build_meta_messages,
+    DiscussionParticipant,
+    SubtopicPlan,
+    Turn,
 )
 
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
 
-
-@dataclass(frozen=True)
-class DecisionAgent:
-    """
-    Dedicated agent for *orchestration decisions*.
-
-    This is intentionally separate from the discussion participants
-    (AgentSpec). It owns the LLM used to decide SPEAK / WAIT / FINISH.
-
-    Typical usage:
-        decider = DecisionAgent(llm=some_small_model)
-
-    The `llm` may be:
-      - a plain chat model that returns text, OR
-      - a model wrapped with structured output, returning a dict.
-    """
-
-    llm: Any  # must support async ainvoke(messages)
-
-
-def _safe_load_json(raw: str) -> dict:
-    """
-    Attempt to robustly parse a JSON object from a model response.
-
-    Small models sometimes wrap JSON in extra text; this function:
-    - Tries json.loads(raw) first.
-    - If that fails, searches for the first {...} block and retries.
-    - Returns {} on failure.
-    """
-    raw = (raw or "").strip()
-    if not raw:
-        return {}
-    try:
-        return json.loads(raw)
-    except json.JSONDecodeError:
-        m = re.search(r"\{.*\}", raw, re.DOTALL)
-        if not m:
-            return {}
-        try:
-            return json.loads(m.group(0))
-        except json.JSONDecodeError:
-            return {}
-
-
-def _parse_decision_dict(agent_id: str, data: dict) -> Decision:
-    """
-    Normalize a single agent's decision dict into a Decision object.
-
-    Expected dict fields:
-      - action: "SPEAK" | "WAIT" | "FINISH"
-      - score:  float 0.0..1.0
-      - intent: short string
-    """
-    print(">> Raw decision JSON from agent %s: %s" % (agent_id, str(data)))
-
-    # Action
-    action = str(data.get("action", "WAIT")).upper()
-    if action not in ("SPEAK", "WAIT", "FINISH"):
-        action = "WAIT"
-
-    # Score
-    try:
-        score = float(data.get("score", 0.0))
-    except Exception as e:
-        print(f"Failed to parse score from decision JSON: {e}")
-        score = 0.0
-    score = max(0.0, min(1.0, score))
-
-    # Intent
-    intent = str(data.get("intent", "")).strip()[:64] or "none"
-
-    # If WAIT, score should not influence speaker choice
-    if action == "WAIT":
-        score = 0.0
-
-    return Decision(
-        agent_id=agent_id,
-        action=action,
-        score=score,
-        intent=intent,
+def _default_subtopic_id(title: str, index: int) -> str:
+    normalized = "".join(
+        ch.lower() if ch.isalnum() else "-" for ch in (title or "").strip()
     )
+    normalized = "-".join(part for part in normalized.split("-") if part)
+    if not normalized:
+        normalized = f"subtopic-{index + 1}"
+    return normalized
 
 
-async def _raw_decision_call(
-    decider: DecisionAgent,
-    agents: Sequence[AgentSpec],
-    state: ConversationState,
-) -> dict:
-    """
-    Call the decision LLM, supporting:
-      - LLM with structured output (returns dict)
-      - Plain text result (JSON string inside content)
-    """
-    messages = build_decision_messages(agents, state)
-
-    # Invoke the model
-    result = await decider.llm.ainvoke(messages)
-
-    # Case 1: Model returned a dict directly (structured output)
-    if isinstance(result, dict):
-        # Result may already be the final JSON object
-        if "decisions" in result:
-            return result
-        # LangChain sometimes wraps structured response in `structured_response`
-        if "structured_response" in result and isinstance(
-            result["structured_response"], dict
-        ):
-            return result["structured_response"]
-        # If the model wrapped content under "content" as dict, use that
-        content = result.get("content", None)
-        if isinstance(content, dict) and "decisions" in content:
-            return content
-
-        # If no top-level field, assume the whole dict is JSON-like
-        return result
-
-    # Case 2: Model returned an object with `.structured_response` (LangChain)
-    if hasattr(result, "structured_response"):
-        structured = result.structured_response
-        if isinstance(structured, dict):
-            return structured
-
-    # Case 3: Otherwise, parse raw text from `.content`
-    text = getattr(result, "content", None) or str(result)
-    return _safe_load_json(text)
-
-
-async def decide_for_all_agents(
-    decider: DecisionAgent,
-    agents: Sequence[AgentSpec],
-    state: ConversationState,
-) -> List[Decision]:
-    """
-    Run decision calls for all agents and collect their decisions.
-    Single coordinator call that returns a decision for each agent.
-
-    If the LLM is configured with structured output, the raw result is
-    a dict and is used directly. Otherwise, the result is parsed from
-    a JSON string (possibly with surrounding text).
-    """
-    print(">> Deciding for all agents: %s" % [a.agent_id for a in agents])
-
-    data = await _raw_decision_call(decider, agents, state)
-    items = data.get("decisions", [])
-
-    # Index decisions by agent_id for easy lookup
-    by_id = {}
-    if isinstance(items, list):
-        for item in items:
-            if not isinstance(item, dict):
-                continue
-            aid = str(item.get("agent_id", "")).strip()
-            if not aid:
-                continue
-            by_id[aid] = item
-
-    decisions: List[Decision] = []
-    for a in agents:
-        d_data = by_id.get(a.agent_id, {})
-        decision = _parse_decision_dict(a.agent_id, d_data)
-        decisions.append(decision)
-
-    return decisions
-
-
-def choose_speaker(
-    decisions: Sequence[Decision],
+def _coerce_subtopic_plans(
+    raw_subtopics: Any,
     *,
-    min_floor: float = 0.15,
-    min_margin: float = 0.03,
-) -> Optional[str]:
-    """
-    Pick one agent_id to SPEAK based on scores, or None.
+    topic: str,
+    achievement: str,
+) -> list[SubtopicPlan]:
+    if not isinstance(raw_subtopics, list):
+        return []
 
-    Logic:
-    - Filter to decisions with action == "SPEAK".
-    - Sort by score descending.
-    - Reject if top score < min_floor.
-    - (min_margin currently not enforced; only floor is used.)
+    results: list[SubtopicPlan] = []
 
-    The continuation semantics (e.g., same agent speaking twice)
-    are expressed in the decision prompt, which sets the scores.
-    """
-    print(">> Choosing speaker from decisions: %s" % decisions)
+    for index, item in enumerate(raw_subtopics):
+        if not isinstance(item, dict):
+            continue
 
-    speak = [d for d in decisions if d.action == "SPEAK"]
-    if not speak:
-        # No one wants to speak this turn
-        return None
+        title = str(item.get("title", "") or "").strip()
+        kickoff_message = str(item.get("kickoff_message", "") or "").strip()
+        sub_achievement = str(item.get("achievement", "") or "").strip()
 
-    speak_sorted = sorted(speak, key=lambda d: d.score, reverse=True)
-    top1 = speak_sorted[0]
+        if not title:
+            continue
 
-    if top1.score < min_floor:
-        print(
-            ">> No speaker chosen: top score %.2f below floor %.2f"
-            % (top1.score, min_floor)
+        if not kickoff_message:
+            kickoff_message = f"Discuss the subtopic '{title}' and move it toward resolution."
+
+        if not sub_achievement:
+            sub_achievement = achievement or topic
+
+        subtopic_id = str(item.get("subtopic_id", "") or "").strip()
+        if not subtopic_id:
+            subtopic_id = _default_subtopic_id(title, index)
+
+        results.append(
+            SubtopicPlan(
+                subtopic_id=subtopic_id,
+                title=title,
+                kickoff_message=kickoff_message,
+                achievement=sub_achievement,
+                conclusion="",
+                status="PENDING",
+            )
         )
-        return None
 
-    return top1.agent_id
+    return results
 
 
-def should_finish(
-    decisions: Sequence[Decision],
-    state: ConversationState,
+def _fallback_subtopics(
     *,
-    min_turns: int = 4,
-    min_votes: int = 2,
-    min_score: float = 0.7,
-) -> bool:
-    """
-    Decide whether the discussion should finish.
-
-    Guards (aligned with the global FSM):
-      - Do NOT allow finish while the discussion is very short
-        (len(state.turns) < min_turns).
-      - Require at least `min_votes` agents choosing FINISH
-        with score >= min_score.
-    """
-    n_turns = len(state.turns)
-    if n_turns < min_turns:
-        print(
-            ">> should_finish: too early to finish (turns=%d < min_turns=%d)"
-            % (n_turns, min_turns)
+    topic: str,
+    achievement: str,
+) -> list[SubtopicPlan]:
+    return [
+        SubtopicPlan(
+            subtopic_id="topic",
+            title=topic,
+            kickoff_message=(
+                f"Discuss this topic and move toward the session objective: {achievement}"
+            ),
+            achievement=achievement,
+            conclusion="",
+            status="PENDING",
         )
-        return False
-
-    votes = [
-        d for d in decisions if d.action == "FINISH" and d.score >= min_score
     ]
-    print(
-        ">> should_finish: %d FINISH votes with score >= %.2f (min_votes=%d)"
-        % (len(votes), min_score, min_votes)
+
+
+def _format_recent_turns(state: ConversationState, limit: int = 16) -> str:
+    if not state.turns:
+        return "(none)"
+
+    turns = state.turns[-limit:]
+    return "\n".join(
+        f"{turn.turn_index}. @{turn.participant_id}: {turn.content}"
+        for turn in turns
     )
-    return len(votes) >= min_votes
 
 
-def _normalize_meta_action(raw_action: Any) -> MetaAction:
-    """
-    Normalize meta action to one of: 'REFRESH', 'CLOSE'.
-    Default to 'CLOSE' on unknown values.
-    """
-    action = str(raw_action or "").upper()
-    if action not in ("REFRESH", "CLOSE"):
-        action = "CLOSE"
-    return action
+def _format_agent_runtime(agent: AgentSpec, state: ConversationState) -> str:
+    runtime = state.get_participant_state(agent.participant_id)
+
+    return (
+        f"id: {agent.participant_id}\n"
+        f"name: {agent.display_name}\n"
+        f"role: {agent.role}\n"
+        f"goals: {agent.goal}\n"
+        f"summary_text: {runtime.summary_text or '(none)'}\n"
+        f"latest_open_questions: {runtime.latest_open_questions or '(none)'}\n"
+        f"current_focus: {runtime.current_focus or '(none)'}\n"
+        f"times_spoken: {runtime.times_spoken}\n"
+        f"last_spoken_turn_index: {runtime.last_spoken_turn_index}"
+    )
 
 
-async def decide_session_meta(
-    decider: DecisionAgent,
+def _fallback_speaker(
+    agents: Sequence[AgentSpec],
     state: ConversationState,
-) -> MetaDecision:
-    """
-    Called when no agent wants to SPEAK (all WAIT / FINISH).
-    The decision agent decides whether to:
-      - REFRESH: propose a new subtopic / angle to advance the Goal.
-      - CLOSE: end the discussion as unnecessary to continue.
+) -> AgentSpec | None:
+    if not agents:
+        return None
 
-    Supports both structured-output dicts and plain-text JSON.
-    """
-    messages = build_meta_messages(state)
-    _structured_model = decider.llm.with_structured_output(MetaDecision)
-    result = await _structured_model.ainvoke(messages)
-
-    # Structured-output dict case
-    if isinstance(result, dict):
-        # If it already looks like the meta JSON, use directly.
-        if any(k in result for k in ("action", "subtopic", "intent")):
-            data = result
-        else:
-            content = result.get("content", "")
-            data = _safe_load_json(content)
-    else:
-        # Message-style or other object
-        content = getattr(result, "content", None)
-        if isinstance(content, dict):
-            if any(k in content for k in ("action", "subtopic", "intent")):
-                data = content
-            else:
-                data = _safe_load_json(json.dumps(content))
-        elif isinstance(content, str):
-            data = _safe_load_json(content)
-        else:
-            data = _safe_load_json(str(result))
-
-    action = _normalize_meta_action(data.get("action", "CLOSE"))
-    subtopic = str(data.get("subtopic", "") or "")
-    intent = str(data.get("intent", "") or "")
-
-    return MetaDecision(
-        action=action,
-        subtopic=subtopic,
-        intent=intent,
+    ranked = sorted(
+        agents,
+        key=lambda agent: (
+            state.get_participant_state(agent.participant_id).times_spoken,
+            agent.participant_id,
+        ),
     )
+    return ranked[0]
+
+
+def _get_current_subtopic(state: ConversationState) -> Optional[SubtopicPlan]:
+    if 0 <= state.current_subtopic_index < len(state.subtopics):
+        return state.subtopics[state.current_subtopic_index]
+    return None
+
+
+def find_current_subtopic_start_turn_index(
+    state: ConversationState,
+    current_subtopic: SubtopicPlan,
+) -> int:
+    marker = f"[SUBTOPIC] {current_subtopic.title}"
+
+    for turn in reversed(state.turns):
+        if turn.participant_type == "system" and (
+            turn.content or ""
+        ).startswith(marker):
+            return turn.turn_index
+
+    return 0
+
+
+def get_turns_from_index(
+    state: ConversationState,
+    start_turn_index: int,
+) -> list[Turn]:
+    return [
+        turn for turn in state.turns if turn.turn_index >= start_turn_index
+    ]
+
+
+def fallback_subtopic_conclusion(
+    *,
+    state: ConversationState,
+    current_subtopic: SubtopicPlan,
+    turns: Sequence[Turn],
+    participants: Sequence[DiscussionParticipant],
+) -> str:
+    speaker_ids: list[str] = []
+    for turn in turns:
+        if (
+            turn.participant_type == "agent"
+            and turn.participant_id not in speaker_ids
+        ):
+            speaker_ids.append(turn.participant_id)
+
+    participant_summaries: list[str] = []
+    for participant in participants:
+        runtime = state.get_participant_state(participant.participant_id)
+        if runtime.summary_text.strip():
+            participant_summaries.append(
+                f"{participant.participant_id}: {runtime.summary_text.strip()}"
+            )
+
+    parts: list[str] = [
+        f"Subtopic '{current_subtopic.title}' discussion ended.",
+        f"Goal: {current_subtopic.achievement}",
+    ]
+
+    if speaker_ids:
+        parts.append("Participants involved: " + ", ".join(speaker_ids))
+
+    if participant_summaries:
+        parts.append(
+            "Latest agent summaries: " + " | ".join(participant_summaries[:3])
+        )
+
+    return " ".join(parts).strip()
+
+
+async def generate_subtopic_conclusion(
+    *,
+    state: ConversationState,
+    current_subtopic: SubtopicPlan,
+    participants: Sequence[DiscussionParticipant],
+    host_llm: Any | None,
+) -> str:
+    start_turn_index = find_current_subtopic_start_turn_index(
+        state, current_subtopic
+    )
+    subtopic_turns = get_turns_from_index(state, start_turn_index)
+
+    if host_llm is None:
+        return fallback_subtopic_conclusion(
+            state=state,
+            current_subtopic=current_subtopic,
+            turns=subtopic_turns,
+            participants=participants,
+        )
+
+    messages = build_subtopic_conclusion_messages(
+        state=state,
+        current_subtopic=current_subtopic,
+        subtopic_turns=subtopic_turns,
+    )
+
+    try:
+        result = await host_llm.ainvoke(messages)
+    except Exception:
+        return fallback_subtopic_conclusion(
+            state=state,
+            current_subtopic=current_subtopic,
+            turns=subtopic_turns,
+            participants=participants,
+        )
+
+    payload = extract_llm_payload(result)
+    conclusion = str(payload.get("conclusion", "") or "").strip()
+
+    if conclusion:
+        return conclusion
+
+    return fallback_subtopic_conclusion(
+        state=state,
+        current_subtopic=current_subtopic,
+        turns=subtopic_turns,
+        participants=participants,
+    )
+
+
+async def generate_subtopics(
+    *,
+    topic: str,
+    achievement: str,
+    agents: Sequence[AgentSpec],
+    host_llm: Any | None,
+) -> list[SubtopicPlan]:
+    if host_llm is None:
+        return _fallback_subtopics(topic=topic, achievement=achievement)
+
+    agent_roles = (
+        "\n".join(f"- {agent.display_name} ({agent.role})" for agent in agents)
+        or "(none)"
+    )
+
+    system = (
+        "You are planning a structured technical discussion.\n"
+        "Split the session topic into practical subtopics only if decomposition is useful.\n"
+        "If one subtopic is enough, return a single item.\n\n"
+        "Return JSON only.\n"
+        "{"
+        '"subtopics":['
+        '{"title":"subtopic title","kickoff_message":"kickoff text","achievement":"subtopic achievement"}'
+        "]"
+        "}"
+    )
+
+    user = (
+        f"Session topic:\n{topic}\n\n"
+        f"Session objective:\n{achievement}\n\n"
+        f"Participants:\n{agent_roles}\n\n"
+        "Create useful subtopics for the discussion."
+    )
+
+    try:
+        result = await host_llm.ainvoke(
+            [
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ]
+        )
+    except Exception:
+        return _fallback_subtopics(topic=topic, achievement=achievement)
+
+    payload = extract_llm_payload(result)
+    raw_subtopics = (
+        payload.get("subtopics") if isinstance(payload, dict) else None
+    )
+
+    subtopics = _coerce_subtopic_plans(
+        raw_subtopics,
+        topic=topic,
+        achievement=achievement,
+    )
+
+    if not subtopics:
+        return _fallback_subtopics(topic=topic, achievement=achievement)
+
+    return subtopics
+
+
+async def select_next_speaker(
+    agents: Sequence[AgentSpec],
+    state: ConversationState,
+    *,
+    host_llm: Any | None,
+) -> AgentSpec | None:
+    if not agents:
+        return None
+
+    fallback = _fallback_speaker(agents, state)
+    if host_llm is None:
+        return fallback
+
+    current_subtopic = _get_current_subtopic(state)
+    subtopic_title = (
+        current_subtopic.title if current_subtopic else state.topic
+    )
+    subtopic_achievement = (
+        current_subtopic.achievement if current_subtopic else state.achievement
+    )
+
+    agent_blocks = "\n\n".join(
+        _format_agent_runtime(agent, state) for agent in agents
+    )
+
+    system = (
+        "You are the host moderating a technical discussion.\n"
+        "Choose the most suitable next speaker using only visible conversation state.\n"
+        "Prefer the agent who can best advance the current subtopic.\n"
+        "Keep the discussion balanced when multiple agents are similarly relevant.\n\n"
+        f"{RESPONSE_SIZE_RULE}\n"
+        "Return JSON only.\n"
+        '{"speaker_id":"agent_id or empty"}'
+    )
+
+    user = (
+        f"Session topic:\n{state.topic}\n\n"
+        f"Session objective:\n{state.achievement}\n\n"
+        f"Current subtopic:\n{subtopic_title}\n\n"
+        f"Current subtopic achievement:\n{subtopic_achievement}\n\n"
+        f"Candidate agents:\n{agent_blocks}\n\n"
+        f"Recent conversation:\n{_format_recent_turns(state)}\n\n"
+        "Choose the next speaker.\n"
+        "Return empty speaker_id if nobody should speak now."
+    )
+
+    try:
+        result = await host_llm.ainvoke(
+            [
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ]
+        )
+    except Exception:
+        return fallback
+
+    payload = extract_llm_payload(result)
+    speaker_id = str(payload.get("speaker_id", "") or "").strip()
+
+    if not speaker_id:
+        return None
+
+    for agent in agents:
+        if agent.participant_id == speaker_id:
+            return agent
+
+    return fallback

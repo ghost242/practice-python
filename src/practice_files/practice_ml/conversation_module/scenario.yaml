@@ -1,0 +1,270 @@
+steps:
+  - step: 1
+    name: Requirement Analysis & Team Formation
+    topic: >
+      Analyze requirements for a web-based DRM-protected EPUB rental service
+      where users browse, rent, and read books directly in a browser using a
+      web reader. The system must support time-limited rental access and run
+      entirely in a standard web browser on the client side without native apps.
+
+    achievement:
+      - Identify core user scenarios
+      - Define non-functional requirements (scale, reliability, latency)
+      - Determine technical constraints
+      - Define required roles and responsibilities in the team
+
+    discussion_themes:
+      - web-based EPUB reading requirements
+      - DRM enforcement in browser environment
+      - document storage and delivery model
+      - rental lifecycle and expiration rules
+      - target scale (users, documents)
+      - initial project team structure
+
+    output_artifacts:
+      - service requirement summary
+      - team composition
+
+    kickoff_message: |
+      We are beginning the first phase of a new software project.
+
+      The goal of this phase is to understand the service we are going to build
+      and determine the team structure required to develop it.
+
+      The service concept is a web-based digital library that rents
+      DRM-protected EPUB books. Users should be able to browse a catalog,
+      rent a book for a limited time, and read it directly in a browser-based
+      EPUB reader without installing any native application.
+
+      In this discussion:
+      - Identify the essential user scenarios that the service must support.
+      - Identify the major technical constraints and risks.
+      - Identify important non-functional requirements such as scalability,
+        latency, and reliability.
+      - Determine what engineering roles are required to deliver this system.
+
+      Avoid proposing architecture or implementation details yet.
+
+      The objective is to finish this phase with:
+      - a clear definition of the core service capabilities
+      - a list of key technical requirements
+      - a defined project team structure
+
+
+  - step: 2
+    name: Architecture Design
+    topic: >
+      Design the backend architecture and infrastructure required to support
+      a browser-based DRM-protected EPUB rental service, including catalog
+      browsing, rental management, authorization for reading access, and
+      delivery of EPUB content to a web reader.
+
+    achievement:
+      - Define system components and service boundaries
+      - Define communication patterns between services
+      - Select core technologies
+      - Design deployment topology
+
+    discussion_themes:
+      - architecture for web EPUB reader authorization
+      - secure EPUB delivery to browser
+      - backend service decomposition
+      - database choice for catalog and rental records
+      - object storage for EPUB assets
+      - caching layer and CDN usage
+
+    output_artifacts:
+      - architecture diagram (conceptual)
+      - infrastructure topology
+
+    kickoff_message: |
+      We have completed the requirement analysis phase.
+
+      The service requirements and team structure are now defined.
+      In this phase we must design the architecture that will support
+      a browser-based DRM-protected EPUB rental service.
+
+      The system must allow users to:
+      - browse a catalog of books
+      - rent a title for a limited time
+      - open the book in a web-based EPUB reader
+      - automatically lose access when the rental expires
+
+      During this discussion:
+      - Define the major system components.
+      - Define how those components communicate.
+      - Select appropriate technologies where necessary.
+      - Identify infrastructure components required for reliable operation.
+
+      Focus on system architecture rather than detailed implementation.
+
+
+  - step: 3
+    name: Development Planning
+    topic: >
+      Create a development roadmap for implementing the browser-based
+      DRM-protected EPUB rental platform according to the architecture.
+
+    achievement:
+      - Divide system into implementable modules
+      - Assign responsibilities to team roles
+      - Define development milestones
+      - Identify integration dependencies
+
+    discussion_themes:
+      - frontend web reader development
+      - backend API implementation
+      - catalog service implementation
+      - rental and entitlement logic
+      - repository structure
+      - sprint structure
+
+    output_artifacts:
+      - development roadmap
+      - task breakdown structure
+
+    kickoff_message: |
+      The system architecture for the EPUB rental platform has now been defined.
+
+      In this phase we must create a practical development roadmap.
+
+      During this discussion:
+      - Divide the system into development modules.
+      - Identify responsibilities for frontend, backend, and DevOps roles.
+      - Determine development milestones.
+      - Identify integration dependencies between system components.
+
+      Focus on project execution planning rather than architecture changes.
+
+
+  - step: 4
+    name: Infrastructure as Code Specification
+    topic: >
+      Define the infrastructure configuration for the EPUB rental service
+      using infrastructure-as-code, including services required to deliver
+      web applications, backend APIs, databases, and secure EPUB asset storage.
+
+    achievement:
+      - Define infrastructure modules
+      - Specify cloud resource configuration
+      - Define environment separation (dev/staging/prod)
+      - Define deployment automation workflow
+
+    discussion_themes:
+      - Terraform modules
+      - container orchestration
+      - object storage for EPUB files
+      - load balancer configuration
+      - CI/CD pipeline
+      - secrets management
+
+    output_artifacts:
+      - infrastructure code specification
+      - deployment pipeline design
+
+    kickoff_message: |
+      The architecture and development plan have now been defined.
+
+      This phase focuses on defining infrastructure configuration using
+      infrastructure-as-code practices.
+
+      The infrastructure must support:
+      - a web frontend
+      - backend APIs
+      - secure storage of EPUB files
+      - scalable access to rental and catalog services
+
+      During this discussion:
+      - Define infrastructure modules and resources.
+      - Specify cloud services and configuration patterns.
+      - Define environment separation such as development, staging, and production.
+      - Define how infrastructure will be deployed automatically.
+
+
+  - step: 5
+    name: Integration Testing
+    topic: >
+      Perform integration testing across all components of the EPUB rental
+      platform, including browser reader access, rental authorization, and
+      backend services.
+
+    achievement:
+      - Define integration test scenarios
+      - Identify system interaction failures
+      - Fix implementation issues while preserving requirements
+      - Verify system behavior across services
+
+    discussion_themes:
+      - reader authorization flows
+      - API compatibility
+      - rental expiration enforcement
+      - service timeout handling
+      - concurrency edge cases
+
+    output_artifacts:
+      - integration test report
+      - resolved defect list
+
+    kickoff_message: |
+      The system has been implemented according to the architecture and
+      development plan.
+
+      In this phase we perform integration testing across all system components.
+
+      The testing must validate:
+      - catalog browsing
+      - book rental flows
+      - web reader authorization
+      - rental expiration behavior
+
+      During this discussion:
+      - Identify integration test scenarios.
+      - Analyze interactions between system components.
+      - Detect errors that appear during integration.
+      - Propose fixes to implementation problems.
+
+      Do not modify the original service requirements.
+
+
+  - step: 6
+    name: Monitoring and Operations Plan
+    topic: >
+      Design an operational monitoring strategy for the EPUB rental platform,
+      focusing on reliability of the web reader, backend APIs, and secure
+      delivery of EPUB content.
+
+    achievement:
+      - Define monitoring metrics
+      - Define alert rules
+      - Define incident response workflow
+      - Define operational dashboards
+
+    discussion_themes:
+      - latency of reader authorization API
+      - CDN delivery metrics
+      - backend error monitoring
+      - distributed tracing
+      - operational alerts
+      - SLA definitions
+
+    output_artifacts:
+      - monitoring architecture
+      - incident response plan
+
+    kickoff_message: |
+      The system has passed integration testing and is ready for operational planning.
+
+      This phase focuses on designing the monitoring and operational strategy
+      required to operate the EPUB rental platform safely in production.
+
+      The monitoring system must detect issues affecting:
+      - the web reader
+      - backend services
+      - rental authorization
+      - EPUB content delivery.
+
+      During this discussion:
+      - Define system metrics that must be monitored.
+      - Define logging and tracing strategy.
+      - Define alerting rules.
+      - Define procedures for operational response.
