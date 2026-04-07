@@ -112,7 +112,7 @@ class DiscussionParticipant(BaseModel):
         ...,
         description="Functional role of the participant in the discussion, used to shape perspective and replies.",
     )
-    kind: Literal["agent", "system"] = Field(
+    kind: Literal["agent", "user", "system"] = Field(
         default="agent",
         description="Participant category; typically 'agent' for speakers and 'system' for host-like participants.",
     )
@@ -120,17 +120,9 @@ class DiscussionParticipant(BaseModel):
         default_factory=list,
         description="Behavioral traits or speaking tendencies used to condition discussion style and priorities.",
     )
-    goal: List[str] = Field(
-        default_factory=list,
-        description="Participant objectives that describe what perspective or responsibilities the participant should cover.",
-    )
     base_knowledge: List[str] = Field(
         default_factory=list,
         description="Background knowledge, assumptions, or domain context available to the participant for generation.",
-    )
-    can_self_generate: bool = Field(
-        default=True,
-        description="Whether this participant can autonomously generate replies when selected as the next speaker.",
     )
 
 
@@ -157,6 +149,14 @@ class AgentSpec(DiscussionParticipant):
     max_history_turns: int = Field(
         default=20,
         description="Maximum number of recent turns included in prompts for this agent when building context.",
+    )
+    goal: List[str] = Field(
+        default_factory=list,
+        description="Participant objectives that describe what perspective or responsibilities the participant should cover.",
+    )
+    can_self_generate: bool = Field(
+        default=True,
+        description="Whether this participant can autonomously generate replies when selected as the next speaker.",
     )
 
 
